@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+{% load static %}
+<html>
+<head>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script src="{% static 'js/player.js' %}"></script>
+
+  <h1>Spotify Player</h1>
+</head>
+<body>
+  <p id="status">Not connected.</p>
+  <button id="play-button" onclick="togglePlay()" disabled>Play</button>
+</body>
+</html>
+
