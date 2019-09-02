@@ -5,12 +5,46 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script src="{% static 'js/player.js' %}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
 
   <h1>Spotify Player</h1>
 </head>
 <body>
-  <p id="status">Not connected.</p>
-  <button id="play-button" onclick="togglePlay()" disabled>Play</button>
+  <div id="app">
+    <p id="status">Not connected.</p>
+    <button id="play-button" onclick="togglePlay()" disabled>[[ paused ? 'Play' : 'Pause' ]]</button>
+
+    <ul>
+      <song-item
+        v-for="item in songList"
+        v-bind:song="item"
+        v-bind:key="item.id"
+      ></song-item>
+    </ul>
+  </div>
+
+  <script>
+    var paused = true;
+
+    Vue.options.delimiters = ['[[', ']]'];
+
+    Vue.component('song-item', {
+      props: ['song'],
+      template: '<li>[[ song.name ]]</li>'
+    })
+
+    var app = new Vue({
+      el: '#app',
+      data: {
+        player: player,
+        paused: true,
+        songList: [
+          {id: 0, name: 'Crash'},
+          {id: 1, name: 'Darkest Part'},
+          {id: 2, name: 'Always Faithful'}
+        ]
+      },
+    })
+  </script>
 </body>
 </html>
-
