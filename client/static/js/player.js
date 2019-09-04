@@ -1,11 +1,11 @@
-var player;
+var template_data = JSON.parse($('#template-data').text())
+var access_token = template_data['access_token']
 
 $(function() {
   window.onSpotifyWebPlaybackSDKReady = () => {
-    const token = 'BQAw5-RsXeV27q3uKCFgJJxpDXY42LEdjac8aZzpJgTne9VyYBZKzOe-jaehU0Q0rTIqD8L7gRjhvP-t767z-_DeT_TduKdKr0f3ZwYQXUb94kfWQeaf2_FL8o5t_rTruq8c75O5bvt05aWYy8063wcSd7JrktgK2Ab38iIbFkE2jVvEpxAqOF-aKmdZ';
     player = new Spotify.Player({
       name: 'Web Playback SDK Quick Start Player',
-      getOAuthToken: cb => { cb(token); }
+      getOAuthToken: cb => { cb(access_token); }
     });
 
     // Error handling
