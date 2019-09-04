@@ -45,7 +45,7 @@ def client_view(request):
             'redirect_uri': redirect_uri
         }
 
-        b64_string = b64encode('{}:{}'.format(client_id, client_secret))
+        b64_string = b64encode('{}:{}'.format(client_id, client_secret).encode())
 
         headers = {
             'Authorization': 'Basic ' + b64_string
