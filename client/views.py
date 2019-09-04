@@ -29,7 +29,7 @@ def login_view(request):
     return HttpResponseRedirect(url)
 
 def client_view(request):
-    if request.GET['session_id'] == request.session['session_id']:
+    if request.GET['state'] == request.session['session_id']:
         request.session.flush()
         return render(request, 'client/client.html')
     else:
