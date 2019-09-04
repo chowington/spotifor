@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect
 from urllib.parse import urlencode
 from uuid import uuid4
+from base64 import b64encode
 import requests
 
 redirect_uri = 'https://chowington.pythonanywhere.com/spotifor/client'
@@ -44,8 +45,10 @@ def client_view(request):
             'redirect_uri': redirect_uri
         }
 
+        b64_string = b64encode('{}:{}'.format(client_id, client_secret))
+
         headers = {
-            'Authorization': 'Authorization: Basic {}:{}'.format(client_id, client_secret)
+            'Authorization': 'Basic ' + b64_string
         }
 
         response = requests.post('https://accounts.spotify.com/api/token', data=data, headers=headers)
