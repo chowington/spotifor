@@ -2,7 +2,7 @@
 {% load static %}
 <html>
 <head>
-  {{ data|json_script:"template_data" }}
+  {{ data|json_script:"template-data" }}
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
   <script src="{% static 'js/player.js' %}"></script>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
