@@ -16,11 +16,11 @@
     <button id="play-button" onclick="togglePlay()" disabled>[[ paused ? 'Play' : 'Pause' ]]</button>
 
     <ul>
-      <song-item
-        v-for="item in songList"
-        v-bind:song="item"
+      <playlist-item
+        v-for="item in playlistList"
+        v-bind:playlist="item"
         v-bind:key="item.id"
-      ></song-item>
+      ></playlist-item>
     </ul>
   </div>
 
@@ -34,10 +34,16 @@
       template: '<li>[[ song.name ]]</li>'
     })
 
+    Vue.component('playlist-item', {
+      props: ['playlist'],
+      template: '<li>[[ playlist.name ]]</li>'
+    })
+
     var app = new Vue({
       el: '#app',
       data: {
         paused: true,
+        playlistList: [],
         songList: [
           {id: 0, name: 'Crash'},
           {id: 1, name: 'Darkest Part'},
@@ -45,6 +51,31 @@
         ]
       },
     })
+
+    function getMyPlaylists() {
+      var url = 'https://api.spotify.com/v1/me/playlists'
+
+      $.ajax(url, {
+        dataType: 'json',
+        headers: {Authorization: 'Bearer ' + access_token},
+        data: {limit: 50}
+      })
+      .done(function(data) {
+        app.playlistList = [];
+
+        for (playlist of data.items) {
+          playlist_obj = {
+            id: app.playlistList.length,
+            name: playlist.name
+          };
+
+          app.playlistList.push(playlist_obj);
+        }
+      })
+    }
+
+    getMyPlaylists();
   </script>
 </body>
 </html>
+
