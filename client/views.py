@@ -5,7 +5,7 @@ from uuid import uuid4
 from base64 import b64encode
 import requests
 
-redirect_uri = 'https://chowington.pythonanywhere.com/spotifor/client'
+redirect_uri = 'https://chowington.pythonanywhere.com/spotivore/client'
 client_id = '1f9f77385be84819a18e2af962f839ba'
 
 # Create your views here.
