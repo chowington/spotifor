@@ -14,7 +14,7 @@ The main purpose for creating Spotivore is to implement features that are missin
   - Add custom tags to tracks that you can filter by and dynamically create playlists from
   - Live "radio" hosted by a single DJ: A user can host a live "station" (listening session) that others can "tune into" (sync up with) and listen to the same music together
 
-Note that implementing new features is a higher priority than reimplementing all of Spotify's exsiting features, particularly those that are less important, so Spotivore may be missing some of the native client's exisiting functionality in favor of shiny new stuff.
+Note that implementing new features is a higher priority than reimplementing all of Spotify's exsiting features, particularly those that are less important, so Spotivore may be missing some of the native client's existing functionality in favor of shiny new stuff.
 
 Another purpose for this project is to allow me to learn VueJS. That being said, please keep in mind that I'm learning as I go. :)
 
