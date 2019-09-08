@@ -15,7 +15,7 @@ ENV.read_env(os.path.join(BASE_DIR, '.env'))
 redirect_uri = 'https://chowington.pythonanywhere.com/spotivore/client'
 client_id = '1f9f77385be84819a18e2af962f839ba'
 
-with open(os.path.join(BASE_DIR, 'django_secret_key.txt')) as f:
+with open(os.path.join(BASE_DIR, 'spotify_client_secret.txt')) as f:
     client_secret = f.read().strip()
 
 # Create your views here.
