@@ -3,10 +3,20 @@ from django.http import HttpResponse, HttpResponseRedirect
 from urllib.parse import urlencode
 from uuid import uuid4
 from base64 import b64encode
+import os
 import requests
+import environs
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+ENV = environs.Env()
+ENV.read_env(os.path.join(BASE_DIR, '.env'))
 
 redirect_uri = 'https://chowington.pythonanywhere.com/spotivore/client'
 client_id = '1f9f77385be84819a18e2af962f839ba'
+
+with open(os.path.join(BASE_DIR, 'django_secret_key.txt')) as f:
+    client_secret = f.read().strip()
 
 # Create your views here.
 def login_view(request):
@@ -36,27 +46,37 @@ def login_view(request):
     return HttpResponseRedirect(url)
 
 def client_view(request):
-    if ('session_id' in request.session and 
-            request.GET['state'] == request.session['session_id']):
-        request.session.flush()
+    if ENV('DJANGO_HOST') != 'local':
+        if ('session_id' in request.session and 
+                request.GET['state'] == request.session['session_id']):
+            request.session.flush()
 
-        data = {
-            'grant_type': 'authorization_code',
-            'code': request.GET['code'],
-            'redirect_uri': redirect_uri
-        }
+            data = {
+                'grant_type': 'authorization_code',
+                'code': request.GET['code'],
+                'redirect_uri': redirect_uri
+            }
 
-        b64_string = b64encode('{}:{}'.format(client_id, client_secret).encode()).decode()
+            b64_string = b64encode('{}:{}'.format(client_id, client_secret).encode()).decode()
 
-        headers = {
-            'Authorization': 'Basic ' + b64_string
-        }
+            headers = {
+                'Authorization': 'Basic ' + b64_string
+            }
 
-        response = requests.post('https://accounts.spotify.com/api/token', data=data, headers=headers)
-        response.raise_for_status()
+            response = requests.post('https://accounts.spotify.com/api/token', data=data, headers=headers)
+            response.raise_for_status()
 
-        js = {'data': response.json()}
+            js = {'data': response.json()}
+
+            return render(request, 'client/client.html', js)
+
+        else:
+            return HttpResponse('Invalid request')
+
+    else:
+        with open(os.path.join(BASE_DIR, 'spotify_access_token.txt')) as f:
+            access_token = f.read().strip()
+
+        js = {'data': {'access_token': access_token}}
 
         return render(request, 'client/client.html', js)
-    else:
-        return HttpResponse('Invalid request')
