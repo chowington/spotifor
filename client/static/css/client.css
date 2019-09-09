@@ -1,0 +1,37 @@
+body {
+    color: #b3b3b3;
+}
+
+/* Top-level app */
+#app {
+    height: 100vh;
+}
+
+/* Top-level container */
+#app > container {
+    height: 100%;
+}
+
+/* Top row (main) */
+.sidebar {
+    background-color: #121212;
+    flex: 0 0 15rem;
+}
+
+/* Left column */
+
+/* Center */
+#main-content {
+    background-color: #181818;
+}
+
+/* Right column */
+#sidebar-right {
+    display: none;
+}
+
+/* Bottom row (player) */
+#player-row {
+    background-color: #282828;
+    height: 5.5rem;
+}
