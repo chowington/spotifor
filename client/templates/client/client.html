@@ -18,13 +18,13 @@
     <b-container fluid>
       <b-row id="main-row">
         <b-col id="sidebar-left" class="sidebar">
-          <ul>
+          <playlist-list v-on:click.self="refresh">
             <playlist-item
-              v-for="item in playlistList"
+              v-for="item in playlists"
               v-bind:playlist="item"
               v-bind:key="item.id"
             ></playlist-item>
-          </ul>
+          </playlist-list>
         </b-col>
         <b-col id="main-content"></b-col>
         <b-col id="sidebar-right" class="sidebar"></b-col>
@@ -46,9 +46,48 @@
       template: '<li>[[ song.name ]]</li>'
     })
 
+    Vue.component('playlist-list', {
+      data: function() {
+        return {
+          playlists: []
+        }
+      },
+      template: '<h3>Playlists</h3>',
+      methods: {
+        refresh: function() {
+          var url = 'https://api.spotify.com/v1/me/playlists'
+
+          $.ajax(url, {
+            dataType: 'json',
+            headers: {Authorization: 'Bearer ' + access_token},
+            data: {limit: 50}
+          })
+          .done(function(data) {
+            playlists = [];
+
+            for (playlist of data.items) {
+              playlist_obj = {
+                id: app.playlistList.length,
+                name: playlist.name
+              };
+
+              playlists.push(playlist_obj);
+            }
+
+            this.playlists = playlists;
+          })
+        }
+      },
+      created: function() {
+        this.refresh();
+      }
+    })
+
     Vue.component('playlist-item', {
-      props: ['playlist'],
-      template: '<li>[[ playlist.name ]]</li>'
+      props: {
+        playlist: Object
+      },
+      template: '<div>[[ playlist.name ]]</div>'
     })
 
     var app = new Vue({
@@ -63,30 +102,6 @@
         ]
       },
     })
-
-    function getMyPlaylists() {
-      var url = 'https://api.spotify.com/v1/me/playlists'
-
-      $.ajax(url, {
-        dataType: 'json',
-        headers: {Authorization: 'Bearer ' + access_token},
-        data: {limit: 50}
-      })
-      .done(function(data) {
-        app.playlistList = [];
-
-        for (playlist of data.items) {
-          playlist_obj = {
-            id: app.playlistList.length,
-            name: playlist.name
-          };
-
-          app.playlistList.push(playlist_obj);
-        }
-      })
-    }
-
-    getMyPlaylists();
   </script>
 </body>
 </html>
