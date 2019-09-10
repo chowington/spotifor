@@ -40,10 +40,10 @@
           $.ajax(url, {
             method: 'PUT',
             headers: {Authorization: 'Bearer ' + access_token},
-            data: {
+            data: JSON.stringify({
               context_uri: 'spotify:user:spotify:playlist:' + globalStore.playlist_id,
               offset: {position: track_id}
-            }
+            })
           })
         }
       },
