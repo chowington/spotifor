@@ -14,37 +14,100 @@
   <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
 </head>
 <body>
-  <div id="app">
-    <b-container fluid>
-      <b-row id="main-row">
-        <b-col id="sidebar-left" class="sidebar">
-          <playlist-list v-on:click.self="refresh">
-            <playlist-item
-              v-for="item in playlists"
-              v-bind:playlist="item"
-              v-bind:key="item.id"
-            ></playlist-item>
-          </playlist-list>
-        </b-col>
-        <b-col id="main-content"></b-col>
-        <b-col id="sidebar-right" class="sidebar"></b-col>
-      </b-row>
-      <b-row id="player-row">
-        <p id="status">Not connected.</p>
-        <button id="play-button" onclick="togglePlay()" disabled>[[ paused ? 'Play' : 'Pause' ]]</button>
-      </b-row>
-    </b-container>
-  </div>
+  <div id="app"></div>
 
   <script>
+     var globalStore = new Vue({
+      data: {
+        playlist_id: ''
+      }
+    })
+
     var paused = true;
 
     Vue.options.delimiters = ['[[', ']]'];
 
-    Vue.component('song-item', {
-      props: ['song'],
-      template: '<li>[[ song.name ]]</li>'
+    // A local component as an object
+    TrackItem = {
+      props: {
+        track: Object
+      },
+      methods: {
+        playTrack: function() {
+          var url = 'https://api.spotify.com/v1/me/player/play'
+          var track_id = this.track.id;
+
+          $.ajax(url, {
+            method: 'PUT',
+            headers: {Authorization: 'Bearer ' + access_token},
+            data: {
+              context_uri: 'spotify:user:spotify:playlist:' + globalStore.playlist_id,
+              offset: {position: track_id}
+            }
+          })
+        }
+      },
+      template: `
+        <div class="track-item" v-on:click="playTrack">[[ track.name ]]</div>
+      `
+    }
+
+    Vue.component('track-list', {
+      components: {
+        'track-item': TrackItem
+      },
+      template: `
+        <div>
+          <h3>Tracks</h3>
+          <track-item
+            v-for="item in tracks"
+            v-bind:track="item"
+            v-bind:key="item.id"
+          ></track-item>
+        </div>
+      `,
+      computed: {
+        tracks: function() {
+          var playlist_id = globalStore.playlist_id;
+          var track_list = [];
+          var url = 'https://api.spotify.com/v1/playlists/' + playlist_id;
+
+          $.ajax(url, {
+            headers: {Authorization: 'Bearer ' + access_token},
+            async: false
+          })
+          .done(function(data) {
+            for (playlist_track of data.tracks.items) {
+              var track = playlist_track.track
+
+              var track_obj = {
+                id: track_list.length,
+                name: track.name,
+                track_id: track.id
+              };
+
+              track_list.push(track_obj);
+            }
+          })
+
+          return track_list;
+        },
+      },
     })
+
+    PlaylistItem = {
+      props: {
+        playlist: Object,
+      },
+      methods: {
+        setPlaylist: function() {
+          globalStore.playlist_id = this.playlist.playlist_id;
+        }
+      },
+      template: `
+        <div class="playlist-item" v-on:click="setPlaylist">[[ playlist.name ]]</div>
+      `
+    }
 
     Vue.component('playlist-list', {
       data: function() {
@@ -52,9 +115,22 @@
           playlists: []
         }
       },
-      template: '<h3>Playlists</h3>',
+      components: {
+        'playlist-item': PlaylistItem
+      },
+      template: `
+        <div>
+          <h3 v-on:click="refresh">Playlists</h3>
+          <playlist-item
+            v-for="item in playlists"
+            v-bind:playlist="item"
+            v-bind:key="item.id"
+          ></playlist-item>
+        </div>
+      `,
       methods: {
         refresh: function() {
+          var playlists = [];
           var url = 'https://api.spotify.com/v1/me/playlists'
 
           $.ajax(url, {
@@ -63,19 +139,18 @@
             data: {limit: 50}
           })
           .done(function(data) {
-            playlists = [];
-
             for (playlist of data.items) {
-              playlist_obj = {
-                id: app.playlistList.length,
-                name: playlist.name
+              var playlist_obj = {
+                id: playlists.length,
+                name: playlist.name,
+                playlist_id: playlist.id
               };
 
               playlists.push(playlist_obj);
             }
-
-            this.playlists = playlists;
           })
+
+          this.playlists = playlists;
         }
       },
       created: function() {
@@ -83,24 +158,29 @@
       }
     })
 
-    Vue.component('playlist-item', {
-      props: {
-        playlist: Object
-      },
-      template: '<div>[[ playlist.name ]]</div>'
-    })
-
     var app = new Vue({
       el: '#app',
       data: {
         paused: true,
-        playlistList: [],
-        songList: [
-          {id: 0, name: 'Crash'},
-          {id: 1, name: 'Darkest Part'},
-          {id: 2, name: 'Always Faithful'}
-        ]
+        currPlaylist: ''
       },
+      template: `
+        <b-container fluid>
+          <b-row id="main-row">
+            <b-col id="sidebar-left" class="sidebar">
+              <playlist-list></playlist-list>
+            </b-col>
+            <b-col id="main-content">
+              <track-list></track-list>
+            </b-col>
+            <b-col id="sidebar-right" class="sidebar"></b-col>
+          </b-row>
+          <b-row id="player-row">
+            <p id="status">Not connected.</p>
+            <button id="play-button" onclick="togglePlay()" disabled>[[ paused ? 'Play' : 'Pause' ]]</button>
+          </b-row>
+        </b-container>
+      `
     })
   </script>
 </body>

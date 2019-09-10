@@ -19,10 +19,17 @@ body {
 }
 
 /* Left column */
+.playlist-item:hover {
+    color: white;
+}
 
 /* Center */
 #main-content {
     background-color: #181818;
+}
+
+.track-item:hover {
+    color: white;
 }
 
 /* Right column */
