@@ -8,11 +8,20 @@ body {
 }
 
 /* Top-level container */
-#app > container {
-    height: 100%;
+body > .container-fluid {
+    height: 100vh;
 }
 
 /* Top row (main) */
+#main-row {
+    height: 90%;
+}
+
+#main-row > .col {
+    height: 100%;
+    overflow-y: auto;
+}
+
 .sidebar {
     background-color: #121212;
     flex: 0 0 15rem;
@@ -40,5 +49,5 @@ body {
 /* Bottom row (player) */
 #player-row {
     background-color: #282828;
-    height: 5.5rem;
+    height: 10%;
 }
