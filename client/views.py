@@ -27,7 +27,8 @@ def login_view(request):
         'playlist-modify-public',
         'playlist-read-private',
         'user-read-email',
-        'user-read-private'
+        'user-read-private',
+        'user-modify-playback-state'
     ]
 
     session_id = str(uuid4())

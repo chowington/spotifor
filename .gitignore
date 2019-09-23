@@ -4,3 +4,4 @@ db.sqlite3
 django_secret_key.txt
 spotify_access_token.txt
 spotify_client_secret.txt
+__pycache__/
