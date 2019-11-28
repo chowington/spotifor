@@ -28,6 +28,10 @@ body > .container-fluid {
 }
 
 /* Left column */
+.playlist-item {
+    cursor: default;
+}
+
 .playlist-item:hover {
     color: white;
 }
@@ -35,6 +39,10 @@ body > .container-fluid {
 /* Center */
 #main-content {
     background-color: #181818;
+}
+
+.track-item {
+    cursor: default;
 }
 
 .track-item:hover {
