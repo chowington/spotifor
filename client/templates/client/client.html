@@ -12,20 +12,20 @@
   <link type="text/css" rel="stylesheet" href="{% static 'css/client.css' %}" />
   <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
   <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+  <script src="https://kit.fontawesome.com/f184780b57.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="app"></div>
 
   <script>
+     Vue.options.delimiters = ['[[', ']]'];
+
      var globalStore = new Vue({
       data: {
-        playlist_id: ''
+        playlist_id: '',
+        paused: true
       }
     })
-
-    var paused = true;
-
-    Vue.options.delimiters = ['[[', ']]'];
 
     // A local component as an object
     TrackItem = {
@@ -158,11 +158,37 @@
       }
     })
 
+    PlayerComponent = {
+      computed: {
+        paused: function() {
+          return globalStore.paused;
+        }
+      },
+      template: `
+        <div id="player-wrapper">
+            <div id="song-info"></div>
+            <div id="player-controls">
+              <div id="play-button-wrapper">
+                <div id="play-button">
+                  <i class="fas" v-bind:class="[paused ? 'fa-play' : 'fa-pause']" onclick="player.togglePlay()"></i>
+                </div>
+              </div>
+              <div id="scrubber-wrapper">
+                <div id="scrubber-line"></div>
+              </div>
+            </div>
+            <div id="volume-control"></div>
+        </div>
+      `
+    }
+
     var app = new Vue({
       el: '#app',
       data: {
-        paused: true,
         currPlaylist: ''
+      },
+      components: {
+        'player-component': PlayerComponent
       },
       template: `
         <b-container fluid>
@@ -176,8 +202,7 @@
             <b-col id="sidebar-right" class="sidebar"></b-col>
           </b-row>
           <b-row id="player-row">
-            <p id="status">Not connected.</p>
-            <button id="play-button" onclick="togglePlay()" disabled>[[ paused ? 'Play' : 'Pause' ]]</button>
+            <player-component></player-component>
           </b-row>
         </b-container>
       `
