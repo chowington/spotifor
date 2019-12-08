@@ -53,6 +53,11 @@
     }
 
     Vue.component('track-list', {
+      data: function() {
+        return {
+          'tracks': []
+        }
+      },
       components: {
         'track-item': TrackItem
       },
@@ -67,32 +72,43 @@
         </div>
       `,
       computed: {
-        tracks: function() {
-          var playlist_id = globalStore.playlist_id;
-          var track_list = [];
-          var url = 'https://api.spotify.com/v1/playlists/' + playlist_id;
-
+        playlist_id: function() {
+          return globalStore.playlist_id;
+        }
+      },
+      watch: {
+        playlist_id: function(playlist_id) {
+          this.tracks = [];
+          var url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks';
+          this.fetchList(url);
+        },
+      },
+      methods: {
+        fetchList: function(url) {
           $.ajax(url, {
             headers: {Authorization: 'Bearer ' + access_token},
-            async: false
           })
-          .done(function(data) {
-            for (playlist_track of data.tracks.items) {
+          .then((data) => {
+            for (playlist_track of data.items) {
               var track = playlist_track.track
 
               var track_obj = {
-                id: track_list.length,
+                id: this.tracks.length,
                 name: track.name,
                 track_id: track.id
               };
 
-              track_list.push(track_obj);
+              this.tracks.push(track_obj);
+            }
+
+            var next_url = data.next;
+
+            if (next_url) {
+              this.fetchList(next_url);
             }
           })
-
-          return track_list;
-        },
-      },
+        }
+      }
     })
 
     PlaylistItem = {
@@ -130,6 +146,7 @@
       `,
       methods: {
         refresh: function() {
+          this.playlists = [];
           this.fetchList('https://api.spotify.com/v1/me/playlists');
         },
         fetchList: function(url) {
