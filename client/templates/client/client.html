@@ -130,44 +130,31 @@
       `,
       methods: {
         refresh: function() {
-          var playlists = [];
-          var url = 'https://api.spotify.com/v1/me/playlists'
-          var data =  {limit: 50};
-          var fields = [
-            'length',
-            'name',
-            'id'
-          ];
-
-          this.playlists = this.fetchList(url, data, fields);
+          this.fetchList('https://api.spotify.com/v1/me/playlists');
         },
-        fetchList: function(url, payload, fields) {
-          var items = [];
-
+        fetchList: function(url) {
           $.ajax(url, {
             dataType: 'json',
             headers: {Authorization: 'Bearer ' + access_token},
-            data: payload
+            data: {limit: 50}
           })
           .then((data) => {
-            for (obj of data.items) {
-              var new_obj = {};
+            for (playlist of data.items) {
+              var playlist_obj = {
+                id: this.playlists.length,
+                name: playlist.name,
+                playlist_id: playlist.id
+              };
 
-              for (field of fields) {
-                new_obj[field] = obj[field];
-              }
-
-              this.playlists.push(new_obj);
+              this.playlists.push(playlist_obj);
             }
 
             var next_url = data.next;
 
             if (next_url) {
-              this.fetchList(next_url, payload, fields);
+              this.fetchList(next_url);
             }
           })
-
-          return items;
         }
       },
       created: function() {
