@@ -104,9 +104,18 @@ class PlaylistSublists(APIView):
             # Check to see whether playlist object exists
             try:
                 playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+
                 # If it does, check whether it's up to date
                 # Make sure all tracks in same order are there
-                # If not, exit with error
+                # If not, return error
+                curr_playlist_tracks = [track_obj.track_id for track_obj in playlist_obj.tracks.all()]
+
+                if playlist_tracks != curr_playlist_tracks:
+                    data = {
+                        'error': 'resource out of date',
+                        'resource': playlist_id
+                    }
+                    return Response(data, status=status.HTTP_409_CONFLICT)
 
             # If it doesn't, make it
             except Playlist.DoesNotExist:
@@ -126,9 +135,6 @@ class PlaylistSublists(APIView):
             # Get sublist tracks from Spotify
 
             # Add to playlist track list
-
-            print(Playlist.objects.count())
-            print(Track.objects.count())
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
