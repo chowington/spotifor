@@ -12,7 +12,7 @@ class TrackInPlaylist(models.Model):
     track = models.ForeignKey(Track, on_delete=models.CASCADE)
     playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE)
     position = models.IntegerField()
-    sublist = models.ForeignKey(Playlist, on_delete=models.CASCADE, blank=True, related_name='sublist_set')
+    sublist = models.ForeignKey(Playlist, on_delete=models.CASCADE, blank=True, null=True, related_name='sublist_set')
 
     class Meta:
         ordering = ['playlist', 'position']
