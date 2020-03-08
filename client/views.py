@@ -1,8 +1,13 @@
 from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect
+from client.models import Track, Playlist, TrackInPlaylist
 from urllib.parse import urlencode
 from uuid import uuid4
 from base64 import b64encode
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from . import serializers
 import os
 import requests
 import environs
@@ -81,3 +86,64 @@ def client_view(request):
         js = {'data': {'access_token': access_token}}
 
         return render(request, 'client/client.html', js)
+
+class PlaylistSublists(APIView):
+    """
+    List all sublists of a playlist or add a new sublist
+    to a playlist.
+    """
+    def post(self, request, playlist_id, format=None):
+        serializer = serializers.SublistSerializer(data=request.data)
+
+        if serializer.is_valid():
+            # Get playlist tracks from Spotify
+            url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks'
+            
+            playlist_tracks = self.fetch_list(url)
+
+            # Check to see whether playlist object exists
+            try:
+                playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+                # If it does, check whether it's up to date
+                # Make sure all tracks in same order are there
+                # If not, exit with error
+
+            # If it doesn't, make it
+            except Playlist.DoesNotExist:
+                # Save playlist object
+                playlist_obj = Playlist.objects.create(playlist_id=playlist_id)
+
+                # Save track objects if needed
+                for index, track_id in enumerate(playlist_tracks):
+                    try:
+                        track_obj = Track.objects.get(track_id=track_id)
+                    except Track.DoesNotExist:
+                        track_obj = Track.objects.create(track_id=track_id)
+                    finally:
+                        TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=index)
+
+            # Add sublist
+            # Get sublist tracks from Spotify
+
+            # Add to playlist track list
+
+            print(Playlist.objects.count())
+            print(Track.objects.count())
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def fetch_list(self, url):
+        headers = {'Authorization': 'Bearer ' + 'BQBQE6htZzd-QHNZFrEtl4NTo30gWts-OJTATDfa0NevfNRZqJyJErpLhQI7nBGhw4PjFyhyRooto3xA80hzreE7xlm9GeTK-BskZG74lbmbCVzHIFbvRQ25H3pvTCRRcoT31V_udu6pc7VLJ9L2deaTlsknbgoNoIwp6EuSLqQQNBDNyLW9HszsBQ'}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        js = response.json()
+
+        playlist_tracks = [item['track']['id'] for item in js['items']]
+        next_url = js['next']
+
+        if next_url:
+            return playlist_tracks + self.fetch_list(next_url)
+        else:
+            return playlist_tracks
