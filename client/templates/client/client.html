@@ -120,8 +120,13 @@
           globalStore.playlist_id = this.playlist.playlist_id;
         }
       },
+      computed: {
+        selected: function() {
+          return globalStore.playlist_id === this.playlist.playlist_id;
+        }
+      },
       template: `
-        <div class="playlist-item" v-on:click="setPlaylist">[[ playlist.name ]]</div>
+        <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist"><div class="playlist-item-text sidebar-left-item">[[ playlist.name ]]</div></div>
       `
     }
 
@@ -135,8 +140,8 @@
         'playlist-item': PlaylistItem
       },
       template: `
-        <div>
-          <h3 v-on:click="refresh">Playlists</h3>
+        <div id="playlist-list">
+          <div class="header-caps sidebar-left-item" v-on:click="refresh">PLAYLISTS</div>
           <playlist-item
             v-for="item in playlists"
             v-bind:playlist="item"
