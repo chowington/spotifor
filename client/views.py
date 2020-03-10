@@ -98,8 +98,8 @@ class PlaylistSublists(APIView):
         if serializer.is_valid():
             # Get playlist tracks from Spotify
             url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks'
-            
-            playlist_tracks = self.fetch_list(url)
+
+            playlist_tracks = fetch_list(url)
 
             # Check to see whether playlist object exists
             try:
@@ -140,16 +140,39 @@ class PlaylistSublists(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def fetch_list(self, url):
-        headers = {'Authorization': 'Bearer ' + 'BQBQE6htZzd-QHNZFrEtl4NTo30gWts-OJTATDfa0NevfNRZqJyJErpLhQI7nBGhw4PjFyhyRooto3xA80hzreE7xlm9GeTK-BskZG74lbmbCVzHIFbvRQ25H3pvTCRRcoT31V_udu6pc7VLJ9L2deaTlsknbgoNoIwp6EuSLqQQNBDNyLW9HszsBQ'}
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        js = response.json()
+def fetch_list(url):
+    # Need to receive this from the client
+    headers = {'Authorization': 'Bearer ' + 'BQDsGNsggc2ZOYrZVNmR97Lpu95CN4gZF-VO4M70y7mbb3WCoE7krwhGOFLiqOI0gPp-kGr7aQvUxtGJCvrseRU_JDtLeMqfM2eMBdQw04T0waYNF7FKXqU3Z1qfLHC8bqhp7F8AcdmJ5jKOGbawzi3StcP4qGJoHjGxLkenaPmQzJMi4iO3HkH6Rg'}
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    js = response.json()
 
-        playlist_tracks = [item['track']['id'] for item in js['items']]
-        next_url = js['next']
+    playlist_tracks = [item['track']['id'] for item in js['items']]
+    next_url = js['next']
 
-        if next_url:
-            return playlist_tracks + self.fetch_list(next_url)
-        else:
-            return playlist_tracks
+    if next_url:
+        return playlist_tracks + fetch_list(next_url)
+    else:
+        return playlist_tracks
+
+# Sync a playlist object
+# This involves both syncing our version
+# with Spotify's version and pulling in
+# songs from sublists
+#def sync_playlist(playlist_id):
+    # Get sublists and sync them firsts
+
+    # Get track list from Spotify
+
+    # Check whether it matches what Spotivore has
+    # Cases
+        # Matches exactly:
+        # Continue
+
+        # Else resolve by conforming Spotivore's version to match Spotify's
+            # If there are no sublists, simply overwrite Spotivore version
+
+
+# Return a list of a playlist's sublists
+def get_sublists(playlist_id):
+    return list(TrackInPlaylist.objects.filter(playlist__playlist_id=playlist_id).exclude(sublist=None).order_by().values_list('sublist', flat=True).distinct())
