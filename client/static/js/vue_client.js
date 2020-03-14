@@ -1,5 +1,3 @@
-Vue.options.delimiters = ['[[', ']]'];
-
 var globalStore = new Vue({
   data: {
     playlist_id: '',
@@ -28,7 +26,7 @@ TrackItem = {
     }
   },
   template: `
-    <div class="track-item" v-on:click="playTrack">[[ track.name ]]</div>
+    <div class="track-item" v-on:click="playTrack">{{ track.name }}</div>
   `
 }
 
@@ -106,7 +104,7 @@ PlaylistItem = {
     }
   },
   template: `
-    <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist"><div class="playlist-item-text sidebar-left-item">[[ playlist.name ]]</div></div>
+    <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist"><div class="playlist-item-text sidebar-left-item">{{ playlist.name }}</div></div>
   `
 }
 
