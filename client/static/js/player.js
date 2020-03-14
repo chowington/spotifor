@@ -1,5 +1,18 @@
 var template_data = JSON.parse($('#template-data').text())
 var access_token = template_data['access_token']
+var expires_in = template_data['expires_in']
+
+/*function setRefreshTimer(expires_in) {
+  // Duration (in milliseconds) of the timer
+  // We'll refresh the token shortly before it expires
+  var duration = (expires_in - 120) * 1000;
+
+  setTimeout(function() {
+    var url = '';
+
+    $getJSON()
+  }, duration);
+}*/
 
 $(function() {
   window.onSpotifyWebPlaybackSDKReady = () => {
