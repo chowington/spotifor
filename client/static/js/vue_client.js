@@ -30,6 +30,81 @@ TrackItem = {
   `
 }
 
+SublistManager = {
+  template: `
+    <b-modal id="manage-sublists-modal" scrollable header-bg-variant="dark" body-bg-variant="dark" footer-bg-variant="dark" title="Add a sublist" @ok="addSublist(selected_sublist)">
+      <b-form-group label="Individual radios">
+        <div id="sublist-list">
+          <b-form-radio v-model="selected_sublist" name="some-radios" v-bind:value="playlist.playlist_id"
+            v-for="playlist in playlists"
+            v-bind:key="playlist.id"
+          >{{ playlist.name }}</b-form-radio>
+        </div>
+      </b-form-group>
+    </b-modal>
+  `,
+  data: function() {
+    return {
+      playlists: []
+    }
+  },
+  computed: {
+    playlist_id: function() {
+      return globalStore.playlist_id;
+    }
+  },
+  methods: {
+    refresh: function() {
+      this.playlists = [];
+      this.fetchList('https://api.spotify.com/v1/me/playlists');
+    },
+    fetchList: function(url) {
+      $.ajax(url, {
+        dataType: 'json',
+        headers: {Authorization: 'Bearer ' + access_token},
+        data: {limit: 50}
+      })
+      .then((data) => {
+        for (playlist of data.items) {
+          var playlist_obj = {
+            id: this.playlists.length,
+            name: playlist.name,
+            playlist_id: playlist.id
+          };
+
+          if (playlist_obj.id !== this.playlist_id) {
+            this.playlists.push(playlist_obj);
+          }
+        }
+
+        var next_url = data.next;
+
+        if (next_url) {
+          this.fetchList(next_url);
+        }
+      })
+    },
+    addSublist: function(sublist_id) {
+      var url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist_id + '/sublists';
+
+      $.ajax(url, {
+        method: 'POST',
+        dataType: 'json',
+        data: {sublist_id: sublist_id}
+      })
+      .done(() => {
+        console.log('success');
+      })
+      .fail(() => {
+        console.log('failure');
+      })
+    }
+  },
+  created: function() {
+    this.refresh();
+  },
+}
+
 Vue.component('track-list', {
   data: function() {
     return {
@@ -37,16 +112,26 @@ Vue.component('track-list', {
     }
   },
   components: {
-    'track-item': TrackItem
+    'track-item': TrackItem,
+    'sublist-manager': SublistManager
   },
   template: `
     <div>
-      <h3>Tracks</h3>
+      <div id="track-list-header">
+        <h3>Tracks</h3>
+        <span id="playlist-tools">
+          <b-button id="sync-playlist-btn" class="fas fa-sync-alt" v-on:click="refresh" title="Sync playlist with Spotify"></b-button>
+          <b-button id="manage-sublists-btn" class="far fa-list-alt" v-b-modal.manage-sublists-modal title="Manage sublists"></b-button>
+          <b-button id="pull-from-sublists-btn" class="fas fa-share-square" title="Pull tracks from sublists"></b-button>
+          <b-button id="save-playlist-btn" class="fas fa-save" title="Save playlist to Spotify"></b-button>
+        </span>
+      </div>
       <track-item
         v-for="item in tracks"
         v-bind:track="item"
         v-bind:key="item.id"
       ></track-item>
+      <sublist-manager/>
     </div>
   `,
   computed: {
@@ -55,13 +140,16 @@ Vue.component('track-list', {
     }
   },
   watch: {
-    playlist_id: function(playlist_id) {
-      this.tracks = [];
-      var url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks';
-      this.fetchList(url);
+    playlist_id: function() {
+      this.refresh();
     },
   },
   methods: {
+    refresh: function() {
+      this.tracks = [];
+      var url = 'https://api.spotify.com/v1/playlists/' + this.playlist_id + '/tracks';
+      this.fetchList(url);
+    },
     fetchList: function(url) {
       $.ajax(url, {
         headers: {Authorization: 'Bearer ' + access_token},
@@ -104,7 +192,9 @@ PlaylistItem = {
     }
   },
   template: `
-    <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist"><div class="playlist-item-text sidebar-left-item">{{ playlist.name }}</div></div>
+    <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist">
+      <div class="playlist-item-text sidebar-left-item">{{ playlist.name }}</div>
+    </div>
   `
 }
 

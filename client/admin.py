@@ -9,7 +9,8 @@ class PlaylistAdmin(admin.ModelAdmin):
     list_display = ('playlist_id',)
 
 class TrackInPlaylistAdmin(admin.ModelAdmin):
-    list_display = ('playlist', 'position', 'track', 'sublist')
+    list_display = ('playlist', 'position', 'track')
+    ordering = ('playlist', 'position')
 
 admin.site.register(Track, TrackAdmin)
 admin.site.register(Playlist, PlaylistAdmin)

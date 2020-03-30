@@ -23,6 +23,10 @@ client_id = '1f9f77385be84819a18e2af962f839ba'
 with open(os.path.join(BASE_DIR, 'spotify_client_secret.txt')) as f:
     client_secret = f.read().strip()
 
+if ENV('DJANGO_HOST') == 'local':
+    with open(os.path.join(BASE_DIR, 'spotify_access_token.txt')) as f:
+        access_token = f.read().strip()
+
 # Create your views here.
 def login_view(request):
     scopes = [
@@ -97,9 +101,7 @@ class PlaylistSublists(APIView):
 
         if serializer.is_valid():
             # Get playlist tracks from Spotify
-            url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks'
-
-            playlist_tracks = fetch_list(url)
+            playlist_tracks = get_spotify_playlist_tracks(playlist_id)
 
             # Check to see whether playlist object exists
             try:
@@ -119,30 +121,168 @@ class PlaylistSublists(APIView):
 
             # If it doesn't, make it
             except Playlist.DoesNotExist:
-                # Save playlist object
+                # Create playlist object
                 playlist_obj = Playlist.objects.create(playlist_id=playlist_id)
-
-                # Save track objects if needed
-                for index, track_id in enumerate(playlist_tracks):
-                    try:
-                        track_obj = Track.objects.get(track_id=track_id)
-                    except Track.DoesNotExist:
-                        track_obj = Track.objects.create(track_id=track_id)
-                    finally:
-                        TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=index)
+                # Add tracks to it
+                add_tracks_to_playlist(playlist_id, playlist_tracks)
 
             # Add sublist
-            # Get sublist tracks from Spotify
-
-            # Add to playlist track list
+            add_sublist(playlist_id, serializer.sublist_id)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-def fetch_list(url):
+# Sync a playlist object with Spotify's version of the playlist
+def sync_playlist(playlist_id):
+    # Get track list from Spotify
+    spotify_tracklist = get_spotify_playlist_tracks(playlist_id)
+    # Get the tracks in Spotivore's version
+    spotivore_track_objs = TrackInPlaylist.objects.filter(playlist__playlist_id=playlist_id)
+    # Get the ordered tracklist from the tracks
+    spotivore_tracklist = spotivore_track_objs.order_by('position').values_list('track', flat=True)
+    # If there are differences, overwrite Spotivore's version
+    if spotify_tracklist != spotivore_tracklist:
+        spotivore_track_objs.delete()
+        add_tracks_to_playlist(playlist_id, spotivore_tracklist)
+
+        playlist_obj = Playlist.objects.get(playlist_id).has_local_changes = False
+        playlist_obj.save()
+
+        return spotify_tracklist
+
+    else:
+        return None
+
+# Add a sublist to a playlist
+def add_sublist(parent_list_id, sublist_id):
+    if parent_list_id == sublist_id:
+        raise ValueError('Cannot add a playlist as its own sublist.')
+    elif parent_list_id in get_sublists_deep(sublist_id):
+        raise ValueError("Parent playlist exists in sublist's sublist tree.")
+    else:
+        Playlist.objects.get(parent_list_id).sublists.add(sublist_id)
+
+# Return a list of a playlist's first-level sublists
+def get_sublists(playlist_id):
+    return list(Playlist.objects.get(playlist_id).values_list('sublists', flat=True))
+
+# Return a list of all sublists of a playlist recursively
+def get_sublists_deep(playlist_id):
+    all_sublists = first_level_sublists = get_sublists(playlist_id)
+
+    for sublist in first_level_sublists:
+        all_sublists.extend(get_sublists_deep(sublist))
+
+    return all_sublists
+
+# Get a playlist's tracklist from Spotify
+def get_spotify_playlist_tracks(playlist_id):
+    url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks'
+    return fetch_tracklist(url)
+
+# Add tracks from all sublists to this playlist
+# Also recursively add tracks to sublists from their own sublists
+class add_tracks_from_sublists(APIView):
+    def put(self, request, playlist_id, format=None):
+        try:
+            if Playlist.objects.get(playlist_id).has_local_changes:
+                raise ValueError('Parent playlist has local changes.')
+
+            # Check to see whether any playlist in the sublist tree has local changes
+            for sublist in get_sublists_deep(playlist_id):
+                if sublist.has_local_changes:
+                    raise ValueError(f'Sublist {sublist.playlist_id} has local changes.')
+
+            add_tracks_from_sublists_recursive(playlist_id)
+            new_tracklist = list(TrackInPlaylist.objects.filter(playlist=playlist_id).order_by('position').values_list('track', flat=True))
+
+            return Response(new_tracklist, status=status.HTTP_201_CREATED)
+
+        except Exception:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+def add_tracks_from_sublists_recursive(playlist_id):
+    sync_playlist(playlist_id)
+    playlist_obj = Playlist.get(playlist_id)
+    playlist_tracks = playlist_obj.tracks
+    sublists = playlist_obj.sublists
+
+    for sublist in sublists:
+        add_tracks_from_sublists_recursive(sublist.playlist_id)
+
+        for track in sublist.tracks:
+            if track not in playlist_tracks:
+                TrackInPlaylist.objects.create(track=track, playlist=playlist_id, position=len(playlist_tracks))
+                playlist_obj.has_local_changes = True
+
+    playlist_obj.save()
+
+class save_playlist_changes_to_spotify(APIView):
+    def put(self, request, playlist_id, format=None):
+        try:
+            # Get track list from Spotify
+            spotify_tracklist = get_spotify_playlist_tracks(playlist_id)
+            # Get the tracks in Spotivore's version
+            spotivore_track_objs = TrackInPlaylist.objects.filter(playlist__playlist_id=playlist_id)
+            # Get the ordered tracklist from the tracks
+            spotivore_tracklist = spotivore_track_objs.order_by('position').values_list('track', flat=True)
+
+            if len(spotify_tracklist) != len(set(spotify_tracklist)) or len(spotivore_tracklist) != len(set(spotivore_tracklist)):
+                raise ValueError('Cannot currently handle duplicate tracks in a playlist.')
+
+            if spotify_tracklist != spotivore_tracklist:
+                # Determine the tracks to delete and add
+                deleted_tracks = [track for track in spotify_tracklist if track not in spotivore_tracklist]
+                added_tracks = [track for track in spotivore_tracklist if track not in spotify_tracklist]
+
+                # Set request metadata
+                url = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
+                headers = {
+                    'Authorization': 'Bearer ' + access_token,
+                    'Content-Type': 'application/json'
+                }
+
+                # Delete from Spotify the tracks that Spotivore deleted
+                data = {
+                    'tracks': [{'uri': f'spotify:track:{track_id}'} for track_id in deleted_tracks]
+                }
+                response = requests.delete(url, headers=headers, data=data)
+                response.raise_for_status()
+
+                # Add to Spotify the tracks that Spotivore added
+                data = {
+                    'uris': [f'spotify:track:{track_id}' for track_id in added_tracks]
+                }
+                response = requests.post(url, headers=headers, data=data)
+                response.raise_for_status()
+
+                # Reorder tracks to match Spotivore's ordering
+                current_spotify_tracklist = [track for track in spotify_tracklist if track in spotivore_tracklist].extend(added_tracks)
+
+                for correct_index, track_id in enumerate(spotivore_tracklist):
+                    spotify_index = current_spotify_tracklist.index(track_id)
+
+                    if spotify_index != correct_index:
+                        data = {
+                            'range_start': spotify_index,
+                            'insert_before': correct_index
+                        }
+                        response = requests.put(url, headers=headers, data=data)
+                        response.raise_for_status()
+
+                        # Update our replica
+                        current_spotify_tracklist.insert(correct_index, current_spotify_tracklist.pop(spotify_index))
+
+            return Response(status=status.HTTP_201_CREATED)
+
+        except Exception:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+# Recursively fetch a tracklist using the given URL
+def fetch_tracklist(url):
     # Need to receive this from the client
-    headers = {'Authorization': 'Bearer ' + 'BQDsGNsggc2ZOYrZVNmR97Lpu95CN4gZF-VO4M70y7mbb3WCoE7krwhGOFLiqOI0gPp-kGr7aQvUxtGJCvrseRU_JDtLeMqfM2eMBdQw04T0waYNF7FKXqU3Z1qfLHC8bqhp7F8AcdmJ5jKOGbawzi3StcP4qGJoHjGxLkenaPmQzJMi4iO3HkH6Rg'}
+    headers = {'Authorization': 'Bearer ' + access_token}
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     js = response.json()
@@ -151,28 +291,15 @@ def fetch_list(url):
     next_url = js['next']
 
     if next_url:
-        return playlist_tracks + fetch_list(next_url)
+        return playlist_tracks + fetch_tracklist(next_url)
     else:
         return playlist_tracks
 
-# Sync a playlist object
-# This involves both syncing our version
-# with Spotify's version and pulling in
-# songs from sublists
-#def sync_playlist(playlist_id):
-    # Get sublists and sync them firsts
-
-    # Get track list from Spotify
-
-    # Check whether it matches what Spotivore has
-    # Cases
-        # Matches exactly:
-        # Continue
-
-        # Else resolve by conforming Spotivore's version to match Spotify's
-            # If there are no sublists, simply overwrite Spotivore version
-
-
-# Return a list of a playlist's sublists
-def get_sublists(playlist_id):
-    return list(TrackInPlaylist.objects.filter(playlist__playlist_id=playlist_id).exclude(sublist=None).order_by().values_list('sublist', flat=True).distinct())
+def add_tracks_to_playlist(playlist_id, track_ids):
+    for index, track_id in enumerate(track_ids):
+        try:
+            track_obj = Track.objects.get(track_id=track_id)
+        except Track.DoesNotExist:
+            track_obj = Track.objects.create(track_id=track_id)
+        finally:
+            TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_id, position=index)

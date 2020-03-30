@@ -76,6 +76,15 @@ body > .container-fluid {
     background-color: #181818;
 }
 
+#playlist-tools {
+    position: absolute;
+    right: 1rem;
+}
+
+#playlist-tools > b-button {
+    padding: 0.25rem;
+}
+
 .track-item {
     cursor: default;
 }
