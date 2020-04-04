@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Q, F
+#from django.db.models import Q, F
 
 # Create your models here.
 class Track(models.Model):
@@ -12,11 +12,11 @@ class Playlist(models.Model):
     sublists = models.ManyToManyField('self', symmetrical=False, related_name='parent_list_set')
     has_local_changes = models.BooleanField(default=False)
 
-    class Meta:
+    '''class Meta:
         constraints = [
             models.CheckConstraint(check=~Q(sublists__contains=F('playlist_id')), name='sublist_not_same_as_parent')
             #models.CheckConstraint(check=~Q(playlist_id__in=sublists, name='sublist_not_same_as_parent'))
-        ]
+        ]'''
 
 class TrackInPlaylist(models.Model):
     track = models.ForeignKey(Track, on_delete=models.CASCADE)

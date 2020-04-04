@@ -113,11 +113,18 @@ class PlaylistSublists(APIView):
                 curr_playlist_tracks = [track_obj.track_id for track_obj in playlist_obj.tracks.all()]
 
                 if playlist_tracks != curr_playlist_tracks:
-                    data = {
-                        'error': 'resource out of date',
-                        'resource': playlist_id
-                    }
-                    return Response(data, status=status.HTTP_409_CONFLICT)
+                    if not playlist_obj.has_local_changes:
+                        # If we don't match with Spotify but we don't have local changes,
+                        # we're just out-of-date, so update
+                        TrackInPlaylist.objects.filter(playlist=playlist_obj).delete()
+                        add_tracks_to_playlist(playlist_id, playlist_tracks)
+
+                    else:
+                        data = {
+                            'error': 'resource has local changes',
+                            'resource': playlist_id
+                        }
+                        return Response(data, status=status.HTTP_409_CONFLICT)
 
             # If it doesn't, make it
             except Playlist.DoesNotExist:
@@ -127,7 +134,7 @@ class PlaylistSublists(APIView):
                 add_tracks_to_playlist(playlist_id, playlist_tracks)
 
             # Add sublist
-            add_sublist(playlist_id, serializer.sublist_id)
+            add_sublist(playlist_id, serializer.validated_data['sublist_id'])
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -146,7 +153,7 @@ def sync_playlist(playlist_id):
         spotivore_track_objs.delete()
         add_tracks_to_playlist(playlist_id, spotivore_tracklist)
 
-        playlist_obj = Playlist.objects.get(playlist_id).has_local_changes = False
+        playlist_obj = Playlist.objects.get(playlist_id=playlist_id).has_local_changes = False
         playlist_obj.save()
 
         return spotify_tracklist
@@ -161,11 +168,20 @@ def add_sublist(parent_list_id, sublist_id):
     elif parent_list_id in get_sublists_deep(sublist_id):
         raise ValueError("Parent playlist exists in sublist's sublist tree.")
     else:
-        Playlist.objects.get(parent_list_id).sublists.add(sublist_id)
+        try:
+            sublist_obj = Playlist.objects.get(playlist_id=sublist_id)
+        except Playlist.DoesNotExist:
+            sublist_obj = create_new_playlist_obj(sublist_id)
+
+        playlist_obj = Playlist.objects.get(playlist_id=parent_list_id)
+        playlist_obj.sublists.add(sublist_obj)
 
 # Return a list of a playlist's first-level sublists
 def get_sublists(playlist_id):
-    return list(Playlist.objects.get(playlist_id).values_list('sublists', flat=True))
+    try:
+        return list(Playlist.objects.get(playlist_id=playlist_id).sublists.all().values_list('playlist_id', flat=True))
+    except Playlist.DoesNotExist:
+        return []
 
 # Return a list of all sublists of a playlist recursively
 def get_sublists_deep(playlist_id):
@@ -186,7 +202,7 @@ def get_spotify_playlist_tracks(playlist_id):
 class add_tracks_from_sublists(APIView):
     def put(self, request, playlist_id, format=None):
         try:
-            if Playlist.objects.get(playlist_id).has_local_changes:
+            if Playlist.objects.get(playlist_id=playlist_id).has_local_changes:
                 raise ValueError('Parent playlist has local changes.')
 
             # Check to see whether any playlist in the sublist tree has local changes
@@ -204,7 +220,7 @@ class add_tracks_from_sublists(APIView):
 
 def add_tracks_from_sublists_recursive(playlist_id):
     sync_playlist(playlist_id)
-    playlist_obj = Playlist.get(playlist_id)
+    playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
     playlist_tracks = playlist_obj.tracks
     sublists = playlist_obj.sublists
 
@@ -281,7 +297,7 @@ class save_playlist_changes_to_spotify(APIView):
 
 # Recursively fetch a tracklist using the given URL
 def fetch_tracklist(url):
-    # Need to receive this from the client
+    # Need to receive this from the client (or maybe from session?)
     headers = {'Authorization': 'Bearer ' + access_token}
     response = requests.get(url, headers=headers)
     response.raise_for_status()
@@ -296,10 +312,19 @@ def fetch_tracklist(url):
         return playlist_tracks
 
 def add_tracks_to_playlist(playlist_id, track_ids):
+    playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+
     for index, track_id in enumerate(track_ids):
         try:
             track_obj = Track.objects.get(track_id=track_id)
         except Track.DoesNotExist:
             track_obj = Track.objects.create(track_id=track_id)
         finally:
-            TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_id, position=index)
+            TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=index + 1)
+
+def create_new_playlist_obj(playlist_id):
+    playlist_obj = Playlist.objects.create(playlist_id=playlist_id)
+    tracklist = get_spotify_playlist_tracks(playlist_id)
+    add_tracks_to_playlist(playlist_id, tracklist)
+
+    return playlist_obj.refresh_from_db()
