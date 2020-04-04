@@ -5,6 +5,7 @@
   {{ data|json_script:"template-data" }}
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+  <script src="{% static 'js/csrf.js' %}"></script>
   <script src="{% static 'js/player.js' %}"></script>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <link type="text/css" rel="stylesheet" href="//unpkg.com/bootstrap/dist/css/bootstrap.min.css" />
