@@ -63,12 +63,28 @@ body > .container-fluid {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+    border-left: 0.25rem solid #121212;
+    padding-left: 1.25rem;
 }
 
 .playlist-item.active > .playlist-item-text {
     color: white;
-    border-left: 0.25rem solid var(--spotify-green);
-    padding-left: 1.25rem;
+    border-color: var(--spotify-green);
+}
+
+.playlist-item .dot-indicator {
+    visibility: hidden;
+    position: absolute;
+    left: 0.4rem;
+    font-size: 1.2rem;
+    line-height: 100%;
+    height: 100%;
+    color: white;
+}
+
+.playlist-item.has_changes .dot-indicator {
+    visibility: visible;
 }
 
 /* Center */

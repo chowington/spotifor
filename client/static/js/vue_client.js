@@ -1,6 +1,6 @@
 var globalStore = new Vue({
   data: {
-    playlist_id: '',
+    playlist: {},
     paused: true
   }
 })
@@ -19,7 +19,7 @@ TrackItem = {
         method: 'PUT',
         headers: {Authorization: 'Bearer ' + access_token},
         data: JSON.stringify({
-          context_uri: 'spotify:user:spotify:playlist:' + globalStore.playlist_id,
+          context_uri: 'spotify:user:spotify:playlist:' + globalStore.playlist.playlist_id,
           offset: {position: track_id}
         })
       })
@@ -50,7 +50,7 @@ SublistManager = {
   },
   computed: {
     playlist_id: function() {
-      return globalStore.playlist_id;
+      return globalStore.playlist.playlist_id;
     }
   },
   methods: {
@@ -118,11 +118,11 @@ Vue.component('track-list', {
   template: `
     <div>
       <div id="track-list-header">
-        <h3>Tracks</h3>
+        <h3>{{ playlist.name }} ({{ tracks.length }})</h3>
         <span id="playlist-tools">
           <b-button id="sync-playlist-btn" class="fas fa-sync-alt" v-on:click="refresh" title="Sync playlist with Spotify"></b-button>
           <b-button id="manage-sublists-btn" class="far fa-list-alt" v-b-modal.manage-sublists-modal title="Manage sublists"></b-button>
-          <b-button id="pull-from-sublists-btn" class="fas fa-share-square" title="Pull tracks from sublists"></b-button>
+          <b-button id="pull-from-sublists-btn" class="fas fa-share-square" v-on:click="pullTracksFromSublists" title="Pull tracks from sublists"></b-button>
           <b-button id="save-playlist-btn" class="fas fa-save" title="Save playlist to Spotify"></b-button>
         </span>
       </div>
@@ -135,22 +135,39 @@ Vue.component('track-list', {
     </div>
   `,
   computed: {
-    playlist_id: function() {
-      return globalStore.playlist_id;
+    playlist: function() {
+      return globalStore.playlist;
     }
   },
   watch: {
-    playlist_id: function() {
+    playlist: function() {
       this.refresh();
     },
   },
   methods: {
     refresh: function() {
       this.tracks = [];
-      var url = 'https://api.spotify.com/v1/playlists/' + this.playlist_id + '/tracks';
-      this.fetchList(url);
+      let spotivore_url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/tracks';
+      let spotify_url = 'https://api.spotify.com/v1/playlists/' + this.playlist.playlist_id + '/tracks';
+
+      if (this.playlist.has_local_changes) {
+        $.ajax(spotivore_url)
+        .done((track_ids) => {
+          this.getTrackMetadataFromSpotify(track_ids);
+        })
+        .fail((error) => {
+          if (error.error === 'resource not found in Spotivore') {
+            Vue.set(globalStore.playlist, 'has_local_changes', false);
+            this.fetchListRecursive(spotify_url);
+          } else {
+            console.log('failure');
+          }
+        })
+      } else {
+        this.fetchListRecursive(spotify_url);
+      }
     },
-    fetchList: function(url) {
+    fetchListRecursive: function(url) {
       $.ajax(url, {
         headers: {Authorization: 'Bearer ' + access_token},
       })
@@ -170,9 +187,57 @@ Vue.component('track-list', {
         var next_url = data.next;
 
         if (next_url) {
-          this.fetchList(next_url);
+          this.fetchListRecursive(next_url);
         }
       })
+    },
+    pullTracksFromSublists: function() {
+      var url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/pull-tracks-from-sublists';
+
+      // Tell Spotivore to pull tracks from sublists
+      $.ajax(url, {
+        method: 'PATCH'
+      })
+      .done((track_ids) => {
+        // We've received the new track list from Spotivore
+        // Now we need to get the track info from Spotify
+        this.getTrackMetadataFromSpotify(track_ids);
+      })
+      .fail(() => {
+        console.log('failure');
+      })
+    },
+    getTrackMetadataFromSpotify: function(track_ids) {
+      this.tracks = [];
+      this.getTrackMetadataFromSpotifyRecursive(track_ids, 0);
+    },
+    getTrackMetadataFromSpotifyRecursive: function(track_ids, start) {
+      let tracks_url = 'https://api.spotify.com/v1/tracks/';
+      // This endpoint's resource limit
+      let limit = 50;
+      let end = start + limit;
+      let track_ids_slice = track_ids.slice(start, end);
+
+      if (track_ids_slice.length) {
+        let this_url = tracks_url + '?ids=' + track_ids_slice.join(',');
+
+        $.ajax(this_url, {
+          headers: {Authorization: 'Bearer ' + access_token},
+        })
+        .then((data) => {
+          for (track of data.tracks) {
+            let track_obj = {
+              id: this.tracks.length,
+              name: track.name,
+              track_id: track.id
+            };
+  
+            this.tracks.push(track_obj);
+          }
+
+          this.getTrackMetadataFromSpotifyRecursive(track_ids, end);
+        })
+      }
     }
   }
 })
@@ -183,17 +248,17 @@ PlaylistItem = {
   },
   methods: {
     setPlaylist: function() {
-      globalStore.playlist_id = this.playlist.playlist_id;
+      globalStore.playlist = this.playlist;
     }
   },
   computed: {
     selected: function() {
-      return globalStore.playlist_id === this.playlist.playlist_id;
+      return globalStore.playlist.playlist_id === this.playlist.playlist_id;
     }
   },
   template: `
-    <div class="playlist-item" v-bind:class="{active: selected}" v-bind:title="playlist.name" v-on:click="setPlaylist">
-      <div class="playlist-item-text sidebar-left-item">{{ playlist.name }}</div>
+    <div class="playlist-item" v-bind:class="{active: selected, has_changes: playlist.has_local_changes}" v-bind:title="playlist.name" v-on:click="setPlaylist">
+      <div class="playlist-item-text sidebar-left-item"><span class="dot-indicator" title="This playlist has local changes">•</span>{{ playlist.name }}</div>
     </div>
   `
 }
@@ -201,7 +266,18 @@ PlaylistItem = {
 Vue.component('playlist-list', {
   data: function() {
     return {
-      playlists: []
+      playlists_hash: {}
+    }
+  },
+  computed: {
+    playlists: function() {
+      let list = [];
+
+      for (let obj of Object.values(this.playlists_hash)) {
+        list[obj.id] = obj;
+      }
+
+      return list;
     }
   },
   components: {
@@ -219,30 +295,60 @@ Vue.component('playlist-list', {
   `,
   methods: {
     refresh: function() {
-      this.playlists = [];
-      this.fetchList('https://api.spotify.com/v1/me/playlists');
+      this.playlists_hash = {};
+      this.fetchList('https://api.spotify.com/v1/me/playlists')
+        .then(() => {
+          let playlist_ids = Object.values(this.playlists_hash).map(obj => obj.playlist_id);
+          this.checkSpotivore(playlist_ids);
+        })
     },
     fetchList: function(url) {
+      return new Promise((resolve, reject) => {
+        $.ajax(url, {
+          dataType: 'json',
+          headers: {Authorization: 'Bearer ' + access_token},
+          data: {limit: 50}
+        })
+        .done((data) => {
+          for (playlist of data.items) {
+            var playlist_obj = {
+              id: Object.keys(this.playlists_hash).length,
+              name: playlist.name,
+              playlist_id: playlist.id,
+              has_local_changes: false
+            };
+
+            Vue.set(this.playlists_hash, playlist.id, playlist_obj);
+          }
+
+          var next_url = data.next;
+
+          if (next_url) {
+            this.fetchList(next_url)
+              .then(() => {
+                resolve();
+              })
+              .catch((error) => {
+                reject(error);
+              })
+          } else {
+            resolve();
+          }
+        })
+        .fail((error) => {
+          reject(error);
+        })
+      });
+    },
+    checkSpotivore: function(playlist_ids) {
+      let url = 'http://127.0.0.1:8000/spotivore/api/playlists';
+
       $.ajax(url, {
-        dataType: 'json',
-        headers: {Authorization: 'Bearer ' + access_token},
-        data: {limit: 50}
+        data: {id: playlist_ids}
       })
       .then((data) => {
-        for (playlist of data.items) {
-          var playlist_obj = {
-            id: this.playlists.length,
-            name: playlist.name,
-            playlist_id: playlist.id
-          };
-
-          this.playlists.push(playlist_obj);
-        }
-
-        var next_url = data.next;
-
-        if (next_url) {
-          this.fetchList(next_url);
+        for (let obj of data) {
+          Vue.set(this.playlists_hash[obj.playlist_id], 'has_local_changes', obj.has_local_changes);
         }
       })
     }

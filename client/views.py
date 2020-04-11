@@ -91,6 +91,36 @@ def client_view(request):
 
         return render(request, 'client/client.html', js)
 
+class Playlists(APIView):
+    def get(self, request, format=None):
+        playlist_ids = request.GET.getlist('id[]')
+        playlist_objs = Playlist.objects.filter(playlist_id__in=playlist_ids)
+        serializer = serializers.PlaylistSerializer(playlist_objs, many=True)
+        return Response(serializer.data)
+
+class PlaylistTracks(APIView):
+    def get(self, request, playlist_id, format=None):
+        try:
+            playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+
+            if playlist_obj.has_local_changes:
+                tracklist = get_spotivore_playlist_tracks(playlist_id)
+                send = True
+            else:
+                send = False
+
+        except Playlist.DoesNotExist:
+            send = False
+
+        if send:
+            return Response(tracklist)
+        else:
+            data = {
+                'error': 'resource not found in Spotivore',
+                'resource': playlist_id
+            }
+            return Response(data, status=status.HTTP_404_NOT_FOUND)
+
 class PlaylistSublists(APIView):
     """
     List all sublists of a playlist or add a new sublist
@@ -110,7 +140,7 @@ class PlaylistSublists(APIView):
                 # If it does, check whether it's up to date
                 # Make sure all tracks in same order are there
                 # If not, return error
-                curr_playlist_tracks = [track_obj.track_id for track_obj in playlist_obj.tracks.all()]
+                curr_playlist_tracks = get_spotivore_playlist_tracks(playlist_id)
 
                 if playlist_tracks != curr_playlist_tracks:
                     if not playlist_obj.has_local_changes:
@@ -151,9 +181,10 @@ def sync_playlist(playlist_id):
     # If there are differences, overwrite Spotivore's version
     if spotify_tracklist != spotivore_tracklist:
         spotivore_track_objs.delete()
-        add_tracks_to_playlist(playlist_id, spotivore_tracklist)
+        add_tracks_to_playlist(playlist_id, spotify_tracklist)
 
-        playlist_obj = Playlist.objects.get(playlist_id=playlist_id).has_local_changes = False
+        playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+        playlist_obj.has_local_changes = False
         playlist_obj.save()
 
         return spotify_tracklist
@@ -197,42 +228,53 @@ def get_spotify_playlist_tracks(playlist_id):
     url = 'https://api.spotify.com/v1/playlists/' + playlist_id + '/tracks'
     return fetch_tracklist(url)
 
+def get_spotivore_playlist_tracks(playlist_id):
+    return list(TrackInPlaylist.objects.filter(playlist__playlist_id=playlist_id).order_by('position').values_list('track__track_id', flat=True))
+
 # Add tracks from all sublists to this playlist
 # Also recursively add tracks to sublists from their own sublists
 class add_tracks_from_sublists(APIView):
-    def put(self, request, playlist_id, format=None):
+    def patch(self, request, playlist_id, format=None):
         try:
-            if Playlist.objects.get(playlist_id=playlist_id).has_local_changes:
+            playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+
+            if playlist_obj.has_local_changes:
                 raise ValueError('Parent playlist has local changes.')
 
             # Check to see whether any playlist in the sublist tree has local changes
-            for sublist in get_sublists_deep(playlist_id):
-                if sublist.has_local_changes:
-                    raise ValueError(f'Sublist {sublist.playlist_id} has local changes.')
+            for sublist_id in get_sublists_deep(playlist_id):
+                if Playlist.objects.get(playlist_id=sublist_id).has_local_changes:
+                    raise ValueError(f'Sublist {sublist_id} has local changes.')
 
             add_tracks_from_sublists_recursive(playlist_id)
-            new_tracklist = list(TrackInPlaylist.objects.filter(playlist=playlist_id).order_by('position').values_list('track', flat=True))
+            new_tracklist = get_spotivore_playlist_tracks(playlist_id)
 
             return Response(new_tracklist, status=status.HTTP_201_CREATED)
 
-        except Exception:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response([str(e)], status=status.HTTP_400_BAD_REQUEST)
 
 def add_tracks_from_sublists_recursive(playlist_id):
     sync_playlist(playlist_id)
     playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
-    playlist_tracks = playlist_obj.tracks
-    sublists = playlist_obj.sublists
+    playlist_tracks = playlist_obj.tracks.all()
+    sublists = playlist_obj.sublists.all()
+    playlist_changed = False
 
     for sublist in sublists:
         add_tracks_from_sublists_recursive(sublist.playlist_id)
+        sublist_tracks = sublist.tracks.all()
 
-        for track in sublist.tracks:
-            if track not in playlist_tracks:
-                TrackInPlaylist.objects.create(track=track, playlist=playlist_id, position=len(playlist_tracks))
-                playlist_obj.has_local_changes = True
+        for track_obj in sublist_tracks:
+            if track_obj not in playlist_tracks:
+                TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=len(playlist_tracks) + 1)
+                playlist_changed = True
+                playlist_obj.refresh_from_db()
+                playlist_tracks = playlist_obj.tracks.all()
 
-    playlist_obj.save()
+    if playlist_changed:
+        playlist_obj.has_local_changes = True
+        playlist_obj.save()
 
 class save_playlist_changes_to_spotify(APIView):
     def put(self, request, playlist_id, format=None):
@@ -313,6 +355,7 @@ def fetch_tracklist(url):
 
 def add_tracks_to_playlist(playlist_id, track_ids):
     playlist_obj = Playlist.objects.get(playlist_id=playlist_id)
+    num_tracks = playlist_obj.tracks.count()
 
     for index, track_id in enumerate(track_ids):
         try:
@@ -320,7 +363,7 @@ def add_tracks_to_playlist(playlist_id, track_ids):
         except Track.DoesNotExist:
             track_obj = Track.objects.create(track_id=track_id)
         finally:
-            TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=index + 1)
+            TrackInPlaylist.objects.create(track=track_obj, playlist=playlist_obj, position=num_tracks + index + 1)
 
 def create_new_playlist_obj(playlist_id):
     playlist_obj = Playlist.objects.create(playlist_id=playlist_id)
