@@ -5,6 +5,18 @@ var globalStore = new Vue({
   }
 })
 
+// This is disgusting and needs to be fixed,
+// probably by just using VueX
+function vueSetGlobalStorePlaylistHasLocalChanges(has_local_changes) {
+  let new_playlist_obj = {
+    id: globalStore.playlist.id,
+    name: globalStore.playlist.name,
+    playlist_id: globalStore.playlist.playlist_id,
+    has_local_changes: has_local_changes
+  }
+  Vue.set(globalStore, 'playlist', new_playlist_obj);
+}
+
 // A local component as an object
 TrackItem = {
   props: {
@@ -120,10 +132,10 @@ Vue.component('track-list', {
       <div id="track-list-header">
         <h3>{{ playlist.name }} ({{ tracks.length }})</h3>
         <span id="playlist-tools">
-          <b-button id="sync-playlist-btn" class="fas fa-sync-alt" v-on:click="refresh" title="Sync playlist with Spotify"></b-button>
+          <b-button id="sync-playlist-btn" class="fas fa-sync-alt" v-on:click="syncWithSpotify" title="Sync playlist with Spotify"></b-button>
           <b-button id="manage-sublists-btn" class="far fa-list-alt" v-b-modal.manage-sublists-modal title="Manage sublists"></b-button>
           <b-button id="pull-from-sublists-btn" class="fas fa-share-square" v-on:click="pullTracksFromSublists" title="Pull tracks from sublists"></b-button>
-          <b-button id="save-playlist-btn" class="fas fa-save" title="Save playlist to Spotify"></b-button>
+          <b-button id="save-playlist-btn" class="fas fa-save" v-on:click="saveToSpotify" title="Save playlist to Spotify"></b-button>
         </span>
       </div>
       <track-item
@@ -157,13 +169,13 @@ Vue.component('track-list', {
         })
         .fail((error) => {
           if (error.error === 'resource not found in Spotivore') {
-            Vue.set(globalStore.playlist, 'has_local_changes', false);
-            this.fetchListRecursive(spotify_url);
+            vueSetGlobalStorePlaylistHasLocalChanges(false);
           } else {
             console.log('failure');
           }
         })
-      } else {
+      }
+      else {
         this.fetchListRecursive(spotify_url);
       }
     },
@@ -191,6 +203,26 @@ Vue.component('track-list', {
         }
       })
     },
+    syncWithSpotify: function() {
+      if (this.playlist.has_local_changes) {
+        let url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/revert-to-spotify';
+
+        $.ajax(url, {
+          method: 'PATCH'
+        })
+        .then((data, textStatus, jqXHR) => {
+          if (jqXHR.status === 200 || (jqXHR.status === 404 && data.error === 'resource not found in Spotivore')) {
+            vueSetGlobalStorePlaylistHasLocalChanges(false);
+          }
+          else {
+            console.log('failure');
+          }
+        })
+      }
+      else {
+        this.refresh();
+      }
+    },
     pullTracksFromSublists: function() {
       var url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/pull-tracks-from-sublists';
 
@@ -198,14 +230,31 @@ Vue.component('track-list', {
       $.ajax(url, {
         method: 'PATCH'
       })
-      .done((track_ids) => {
-        // We've received the new track list from Spotivore
-        // Now we need to get the track info from Spotify
-        this.getTrackMetadataFromSpotify(track_ids);
+      .done((data) => {
+        if(data.message === 'New tracks found and added') {
+          // We've received the new track list from Spotivore
+          // Now we need to get the track info from Spotify
+          vueSetGlobalStorePlaylistHasLocalChanges(true);
+        }
       })
       .fail(() => {
         console.log('failure');
       })
+    },
+    saveToSpotify: function() {
+      if (this.playlist.has_local_changes) {
+        let url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/save';
+
+        $.ajax(url, {
+          method: 'PATCH'
+        })
+        .done(() => {
+          vueSetGlobalStorePlaylistHasLocalChanges(false);
+        })
+        .fail(() => {
+          console.log('failure');
+        })
+      }
     },
     getTrackMetadataFromSpotify: function(track_ids) {
       this.tracks = [];
@@ -248,7 +297,7 @@ PlaylistItem = {
   },
   methods: {
     setPlaylist: function() {
-      globalStore.playlist = this.playlist;
+      Vue.set(globalStore, 'playlist', this.playlist);
     }
   },
   computed: {
@@ -278,6 +327,14 @@ Vue.component('playlist-list', {
       }
 
       return list;
+    },
+    selected_playlist: function() {
+      return globalStore.playlist;
+    },
+  },
+  watch: {
+    selected_playlist: function() {
+      this.checkSpotivore();
     }
   },
   components: {
@@ -298,8 +355,7 @@ Vue.component('playlist-list', {
       this.playlists_hash = {};
       this.fetchList('https://api.spotify.com/v1/me/playlists')
         .then(() => {
-          let playlist_ids = Object.values(this.playlists_hash).map(obj => obj.playlist_id);
-          this.checkSpotivore(playlist_ids);
+          this.checkSpotivore();
         })
     },
     fetchList: function(url) {
@@ -340,7 +396,8 @@ Vue.component('playlist-list', {
         })
       });
     },
-    checkSpotivore: function(playlist_ids) {
+    checkSpotivore: function() {
+      let playlist_ids = Object.values(this.playlists_hash).map(obj => obj.playlist_id);
       let url = 'http://127.0.0.1:8000/spotivore/api/playlists';
 
       $.ajax(url, {
