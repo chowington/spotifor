@@ -332,6 +332,8 @@ class save_playlist_changes_to_spotify(APIView):
                 response.raise_for_status()
 
                 # Add to Spotify the tracks that Spotivore added
+                # Warning: this endpoint can only handle 100 tracks at a time,
+                # which we're not accouting for yet
                 data = {
                     'uris': [f'spotify:track:{track_id}' for track_id in added_tracks]
                 }

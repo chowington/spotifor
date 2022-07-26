@@ -1,38 +1,50 @@
+// The global data store that components can read and write to.
+// Should do this properly with VueX eventually.
 var globalStore = new Vue({
   data: {
+    // The currently-selected playlist as an object
     playlist: {},
+    // Whether the player is paused
     paused: true
   }
 })
 
-// This is disgusting and needs to be fixed,
-// probably by just using VueX
+// Set globalStore.playlist.has_local_changes. Vue's reactivity doesn't work
+// quite right unless we do it this way. Nevertheless, this is disgusting and
+// needs to be fixed, probably by just using VueX.
 function vueSetGlobalStorePlaylistHasLocalChanges(has_local_changes) {
+  // Define the new playlist object to replace the old one
   let new_playlist_obj = {
     id: globalStore.playlist.id,
     name: globalStore.playlist.name,
     playlist_id: globalStore.playlist.playlist_id,
     has_local_changes: has_local_changes
   }
+  // Replace the old playlist object
   Vue.set(globalStore, 'playlist', new_playlist_obj);
 }
 
-// A local component as an object
+// A single track component that can be clicked to play the track
 TrackItem = {
   props: {
     track: Object
   },
   methods: {
+    // Play this track on the user's Spotify. This plays the track wherever
+    // the user is currently listening, whether that be the Spotivore player or
+    // somewhere else. Note that this does NOT yet work correctly when there
+    // are local changes to the playlist.
     playTrack: function() {
       var url = 'https://api.spotify.com/v1/me/player/play'
-      var track_id = this.track.id;
 
       $.ajax(url, {
         method: 'PUT',
         headers: {Authorization: 'Bearer ' + access_token},
         data: JSON.stringify({
+          // The context playlist to play in
           context_uri: 'spotify:user:spotify:playlist:' + globalStore.playlist.playlist_id,
-          offset: {position: track_id}
+          // Which track to start at in the playlist
+          offset: {position: this.track.id}
         })
       })
     }
@@ -42,6 +54,8 @@ TrackItem = {
   `
 }
 
+// A modal that displays a user's playlists and lets the user choose one to add
+// as a sublist to the current playlist
 SublistManager = {
   template: `
     <b-modal id="manage-sublists-modal" scrollable header-bg-variant="dark" body-bg-variant="dark" footer-bg-variant="dark" title="Add a sublist" @ok="addSublist(selected_sublist)">
@@ -57,38 +71,58 @@ SublistManager = {
   `,
   data: function() {
     return {
+      // A list of playlist objects representing the user's playlists
       playlists: []
     }
   },
   computed: {
+    // Pull the current playlist ID (Spotify URI) from the globalStore
     playlist_id: function() {
       return globalStore.playlist.playlist_id;
     }
   },
   methods: {
+    // Refresh the playlist list (this only happens once in this component).
+    // These functions are similar to the functions in PlaylistList and should
+    // be refactored.
     refresh: function() {
+      // Empty the list of playlists
       this.playlists = [];
-      this.fetchList('https://api.spotify.com/v1/me/playlists');
+      // Pull playlists from Spotify
+      this.fetchList();
     },
-    fetchList: function(url) {
+    // Recursively fetches the user's playlists from Spotify, creates playlist
+    // objects from them, and adds them to this component's list of playlists.
+    fetchList: function(url='https://api.spotify.com/v1/me/playlists') {
+      // Send the request
       $.ajax(url, {
         dataType: 'json',
         headers: {Authorization: 'Bearer ' + access_token},
+        // 50 is the max for this endpoint
         data: {limit: 50}
       })
+      // Process the data
       .then((data) => {
         for (playlist of data.items) {
-          var playlist_obj = {
-            id: this.playlists.length,
-            name: playlist.name,
-            playlist_id: playlist.id
-          };
+          // Add the playlist if it's not the current playlist (you can't add a
+          // playlist as a subset of itself) - this check is currently broken
+          if (playlist.id !== this.playlist_id) {
+            // Create the new playlist object
+            var playlist_obj = {
+              // The ID that Vue recommends for each element in a v-for loop
+              id: this.playlists.length,
+              name: playlist.name,
+              // The playlist's Spotify URI
+              playlist_id: playlist.id
+            };
 
-          if (playlist_obj.id !== this.playlist_id) {
+            // Add it to the list
             this.playlists.push(playlist_obj);
           }
         }
 
+        // If there are still more playlists, this URL returns the next group.
+        // If there aren't any, it's empty.
         var next_url = data.next;
 
         if (next_url) {
@@ -96,9 +130,13 @@ SublistManager = {
         }
       })
     },
+    // Add the given playlist as a sublist of the current playlist
     addSublist: function(sublist_id) {
+      // The URL to the parent playlist's sublists
       var url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist_id + '/sublists';
 
+      // Send the request to Spotivore with the Spotify URI of the sublist in
+      // the body
       $.ajax(url, {
         method: 'POST',
         dataType: 'json',
@@ -113,13 +151,16 @@ SublistManager = {
     }
   },
   created: function() {
+    // Populate the list of playlists
     this.refresh();
   },
 }
 
+// The list of tracks in the current playlist and a toolbar to manage the playlist.
 Vue.component('track-list', {
   data: function() {
     return {
+      // A list of track objects representing the tracks in the current playlist
       'tracks': []
     }
   },
@@ -146,37 +187,53 @@ Vue.component('track-list', {
       <sublist-manager/>
     </div>
   `,
+  
   computed: {
+    // Pull the current playlist object from the globalStore
     playlist: function() {
       return globalStore.playlist;
     }
   },
   watch: {
+    // When the current playlist changes, refresh the tracklist
     playlist: function() {
       this.refresh();
     },
   },
   methods: {
+    // Pull the current playlist's tracks and refresh the tracklist
     refresh: function() {
+      // Empty the tracklist
       this.tracks = [];
-      let spotivore_url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/tracks';
-      let spotify_url = 'https://api.spotify.com/v1/playlists/' + this.playlist.playlist_id + '/tracks';
 
+      // If the playlist has local changes stored in Spotivore, we need to pull
+      // the tracklist from there
       if (this.playlist.has_local_changes) {
-        $.ajax(spotivore_url)
+        let url = 'http://127.0.0.1:8000/spotivore/api/playlists/' + this.playlist.playlist_id + '/tracks';
+
+        // Send the request to Spotivore
+        $.ajax(url)
         .done((track_ids) => {
+          // We have the track IDs from Spotivore; now we need to get the track
+          // metadata from Spotify
           this.getTrackMetadataFromSpotify(track_ids);
         })
         .fail((error) => {
           if (error.error === 'resource not found in Spotivore') {
+            // This means that Spotivore doesn't actually have a unique
+            // tracklist for this playlist. Set
+            // globalStore.playlist.has_local_changes to false, which will
+            // trigger the refresh function again.
             vueSetGlobalStorePlaylistHasLocalChanges(false);
           } else {
             console.log('failure');
           }
         })
       }
+      // Otherwise, get tracks from Spotify
       else {
-        this.fetchListRecursive(spotify_url);
+        let url = 'https://api.spotify.com/v1/playlists/' + this.playlist.playlist_id + '/tracks';
+        this.fetchListRecursive(url);
       }
     },
     fetchListRecursive: function(url) {
