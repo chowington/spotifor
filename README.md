@@ -1,22 +1,58 @@
-# Spotivore — A Spotify client for you.
+# Spotivore
 
-## What is Spotivore?
-Spotivore is a custom Spotify desktop client. It's a work in progress that's still in its early stages.
+A Spotify client for you.
 
-## Why create another Spotify client?
-The main purpose for creating Spotivore is to implement features that are missing in Spotify's native client. Here is a list of Spotivore's potential features (note that these are liable to change or not be implemented at all):
-  - Playlist nesting: Make one playlist a subset of another playlist, so that all tracks added to it will also be added to the larger list
-  - Inter-playlist shuffling: Choose multiple playlists to shuffle seamlessly between
-  - Make bookmarks for albums and playlists so you can pick up right where you left off, preserving shuffling order
-  - Join tracks together so that one track is always followed by the next, even when shuffled
-  - Customizable shuffling behavior: Use fair shuffling or Spotify's weighted shuffling algorithm
-  - Set timestamps for a track to always start or end at
-  - Add custom tags to tracks that you can filter by and dynamically create playlists from
-  - Live "radio" hosted by a single DJ: A user can host a live "station" (listening session) that others can "tune into" (sync up with) and listen to the same music together
+[![Built with Cookiecutter Django](https://img.shields.io/badge/built%20with-Cookiecutter%20Django-ff69b4.svg?logo=cookiecutter)](https://github.com/cookiecutter/cookiecutter-django/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-Note that implementing new features is a higher priority than reimplementing all of Spotify's exsiting features, particularly those that are less important, so Spotivore may be missing some of the native client's existing functionality in favor of shiny new stuff.
+License: GPLv3
 
-Another purpose for this project is to allow me to learn VueJS. That being said, please keep in mind that I'm learning as I go. :)
+## Settings
 
-## That's it!
-Keep an eye out for more updates as this project matures!
+Moved to [settings](https://cookiecutter-django.readthedocs.io/en/latest/1-getting-started/settings.html).
+
+## Basic Commands
+
+### Setting Up Your Users
+
+- To create a **normal user account**, just go to Sign Up and fill out the form. Once you submit it, you'll see a "Verify Your E-mail Address" page. Go to your console to see a simulated email verification message. Copy the link into your browser. Now the user's email should be verified and ready to go.
+
+- To create a **superuser account**, use this command:
+
+      $ python manage.py createsuperuser
+
+For convenience, you can keep your normal user logged in on Chrome and your superuser logged in on Firefox (or similar), so that you can see how the site behaves for both kinds of users.
+
+### Type checks
+
+Running type checks with mypy:
+
+    $ mypy spotivore
+
+### Test coverage
+
+To run the tests, check your test coverage, and generate an HTML coverage report:
+
+    $ coverage run -m pytest
+    $ coverage html
+    $ open htmlcov/index.html
+
+#### Running tests with pytest
+
+    $ pytest
+
+### Live reloading and Sass CSS compilation
+
+Moved to [Live reloading and SASS compilation](https://cookiecutter-django.readthedocs.io/en/latest/2-local-development/developing-locally.html#using-webpack-or-gulp).
+
+## Deployment
+
+The following details how to deploy this application.
+
+### Heroku
+
+See detailed [cookiecutter-django Heroku documentation](https://cookiecutter-django.readthedocs.io/en/latest/3-deployment/deployment-on-heroku.html).
+
+### Docker
+
+See detailed [cookiecutter-django Docker documentation](https://cookiecutter-django.readthedocs.io/en/latest/3-deployment/deployment-with-docker.html).
